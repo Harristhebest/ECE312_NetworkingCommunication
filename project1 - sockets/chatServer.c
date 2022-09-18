@@ -21,9 +21,9 @@
 
         int sockfd, newsockfd, portno, clilen;
         char buffer[256];
-        char username[256];
-
-        char quit_msg [256] = "quit";
+        char username[256]; //other end 
+        char local_name[256];
+        pid_t pid = -1;
         struct sockaddr_in serv_addr, cli_addr;
         int n;
         if (argc < 2) {
@@ -45,43 +45,78 @@
         clilen = sizeof(cli_addr);
         printf("waiting for connection...\n");
         newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
-        printf("please enter your user name:");
-        bzero(username,256);
-        fgets(username,256,stdin);
-        username[strcspn(username,"\n")] = 0;     
         if (newsockfd < 0) 
              error("ERROR on accept");
-        int pid = fork();
-        printf("pid:%d\n",pid);
-        if(pid!=0){
-            printf("connection established\n");
 
-            while (strcmp(buffer,quit_msg)!=0){
-                printf("<%s>",username);
+
+        printf("please enter your user name:");
+        bzero(local_name,strlen(local_name));
+        fgets(local_name,256,stdin);
+        local_name[strcspn(local_name,"\n")] = '\0';
+
+
+        n = write(newsockfd,local_name,255);
+        if (n < 0) error("ERROR writing to socket");
+        printf("usernamer transmmited to the client\n");
+
+        printf("now waiting for the other end to provide the ip addr...\n");    
+
+
+
+    
+
+
+
+
+
+        bzero(username,256);
+        n = read(newsockfd,buffer,255);
+        if (n < 0) error("ERROR reading from socket");
+        printf("username recieved from client\n");
+
+
+
+        bzero(buffer,256);
+        n = read(newsockfd,username,255);
+        if (n < 0) error("ERROR reading from socket");
+        printf("id addr recieved from client\n");
+
+        printf("Connection established with: %s , username : %s\n",buffer,username);
+
+        pid = fork();
+        // printf("multi thread creating... pid = %d\n",pid);
+        
+
+
+        //write messages 
+        if(pid==0){
+            // printf("writting successfully initiated\n");
+            while (strcmp(buffer,"quit\n")!=0){
+                printf("\n%s->",local_name);
                 bzero(buffer,256);
                 fgets(buffer,255,stdin);
+                username[strcspn(username, "\n")] = '\0';
                 n = write(newsockfd,buffer,strlen(buffer));
                 if (n < 0) 
                     error("ERROR writing to socket");  
-                buffer[strcspn(buffer, "\n")] = '\0';
             }
-            kill(pid, SIGTERM);
-        }     
-
+        } 
+        //read messages
         else{
-            while (strcmp(buffer,quit_msg)!=0){
-                bzero(buffer,255);
-                char client [256] = "<client>";
+            // printf("reading successfully initiated\n");
+            while (strcmp(buffer,"quit\n")!=0){
+                printf("\n%s->",local_name);
+
+                bzero(buffer,256);
                 n = read(newsockfd,buffer,255);
                 if (n < 0) error("ERROR reading from socket");
-                strcat(client,buffer);
-                printf("%s\n",client);
-                bzero(client,255);
-                buffer[strcspn(buffer, "\n")] = '\0';
-
+                printf("\n%s -> %s",username, buffer);
             }
         }
-        printf("Server Program ended   pid id:%d\n",pid);
+        kill(pid, SIGKILL);
+        printf("program terminated");
         close(newsockfd);
         return 0; 
    }
+
+    
