@@ -77,10 +77,11 @@
 
 
 
-     printf("please enter your username:");         //ask for the client to provide the username
+     printf("please enter your username:");         //ask for the user to provide the username
      bzero(local_name,256);                         
      fgets(local_name,256,stdin);
      local_name[strcspn(local_name, "\n")] = '\0';
+
 
     printf("ip address: %s\n", argv[1]);
     printf("waiting for connection...\n");

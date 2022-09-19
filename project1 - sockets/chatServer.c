@@ -48,6 +48,7 @@
         char buffer[256];
         char* username = malloc(256);     //other end 
         char local_name[256];   //local end
+        bzero(local_name,256);
         pid_t pid = -1;
         struct sockaddr_in serv_addr, cli_addr;
 
@@ -85,6 +86,7 @@
         fgets(local_name,256,stdin);
         local_name[strcspn(local_name,"\n")] = '\0';
 
+
         //give client the username
         n = write(newsockfd,local_name,255);
         if (n < 0) error("ERROR writing to socket");
@@ -92,14 +94,16 @@
 
         printf("now waiting for the other end to provide the ip addr...\n");    
         //wait for the client to provide the username and ip address
-        bzero(buffer,256);
-        n = read(newsockfd,buffer,255);
+        char newbuffer[256];
+        bzero(newbuffer,256);
+        n = read(newsockfd,newbuffer,255);
         if (n < 0) error("ERROR reading from socket");
-        char* ip_addr = strtok(buffer,",");    
+        char* ip_addr = strtok(newbuffer,",");    
         memset(username,0,256);    
         username = strtok(NULL,",");
 
         printf("Connection established with: %s , username : %s\n",ip_addr,username);
+
 
 
         
@@ -112,11 +116,11 @@
             this while loop will end once either side typed "quit" into the propt, same for the 
             while loop in the child process
             */
+
             while (strcmp(buffer,"quit\n")!=0){
                 printf("\n%s->",local_name);
                 bzero(buffer,256);
                 fgets(buffer,255,stdin);
-                username[strcspn(username, "\n")] = '\0';
                 n = write(newsockfd,buffer,strlen(buffer));
                 if (n < 0) 
                     error("ERROR writing to socket");  
@@ -129,6 +133,7 @@
                 n = read(newsockfd,buffer,255);
                 if (n < 0) error("ERROR reading from socket");
                 printf("\n%s -> %s",username, buffer);
+
             }
         }
         kill(pid, SIGKILL); //kill the process
