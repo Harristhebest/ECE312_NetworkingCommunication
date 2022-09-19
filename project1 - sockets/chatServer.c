@@ -118,7 +118,7 @@
             */
 
             while (strcmp(buffer,"quit\n")!=0){
-                printf("\n%s->",local_name);
+                printf("\n<%s>:",local_name);
                 bzero(buffer,256);
                 fgets(buffer,255,stdin);
                 n = write(newsockfd,buffer,strlen(buffer));
@@ -132,7 +132,7 @@
                 bzero(buffer,256);
                 n = read(newsockfd,buffer,255);
                 if (n < 0) error("ERROR reading from socket");
-                printf("\n%s -> %s",username, buffer);
+                printf("\n<%s>:%s",username, buffer);
 
             }
         }

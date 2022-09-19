@@ -134,10 +134,10 @@
             n = read(sockfd,buffer,255);
             if (n < 0) 
                 error("ERROR reading from socket");     
-            printf("\n %s-> %s",username,buffer);
+            printf("\n<%s>:%s",username,buffer);
         }
     }
-    kill(pid,SIGKILL);  //kill the process
+    kill(pid,0);  //kill the process
     close(sockfd);      //close the socket
     printf("Client Program ended\n");
      return 0;
