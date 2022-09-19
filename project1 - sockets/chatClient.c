@@ -70,13 +70,17 @@
           (char *)&serv_addr.sin_addr.s_addr,
           server->h_length);
      serv_addr.sin_port = htons(portno);            //port number
+     
+     
      if (connect(sockfd,(struct sockaddr *)&serv_addr,sizeof(serv_addr)) < 0) 
          error("ERROR connecting");
+
+
 
      printf("please enter your username:");         //ask for the client to provide the username
      bzero(local_name,256);                         
      fgets(local_name,256,stdin);
-    local_name[strcspn(local_name, "\n")] = '\0';
+     local_name[strcspn(local_name, "\n")] = '\0';
 
     printf("ip address: %s\n", argv[1]);
     printf("waiting for connection...\n");
@@ -109,7 +113,6 @@
 
     //writing @parent 
     if(pid!=0){
-        printf("now writting starts\n");
         /*
         this while loop will end once either side typed "quit" into the propt, same for the 
         while loop in the child process
