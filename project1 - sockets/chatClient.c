@@ -91,7 +91,7 @@
     char info [] = ",";
     strcat(buffer,info);
     strcat(buffer,local_name);
-    n = write(sockfd,buffer,strlen(buffer));        //send the username to the other end
+    n = write(sockfd,buffer,strlen(buffer));        //send the username to the server end
     if (n < 0) 
         error("ERROR writing to socket");
     printf("client username transmitted\n");
