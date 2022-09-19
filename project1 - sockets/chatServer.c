@@ -118,7 +118,7 @@
             */
 
             while (strcmp(buffer,"quit\n")!=0){
-                printf("\n<%s>:",local_name);
+                printf("<%s>:",local_name);
                 bzero(buffer,256);
                 fgets(buffer,255,stdin);
                 n = write(newsockfd,buffer,strlen(buffer));
@@ -136,8 +136,8 @@
 
             }
         }
-        kill(pid, SIGKILL); //kill the process
-        printf("program terminated\n");
+        printf("The Conversation is Ended.\n");
+        kill(pid, SIGINT); //kill the process
         close(newsockfd);   //close the socket channel
         return 0; 
    }
