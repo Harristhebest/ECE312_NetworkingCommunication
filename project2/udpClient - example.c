@@ -9,17 +9,12 @@
 #include <stdlib.h>
 #define _OPEN_SYS_ITOA_EXT
 
-#define SERVER "137.112.38.183"
-// #define SERVER "localhost"
+// #define SERVER "137.112.38.183"
+#define SERVER "localhost"
 
 #define PORT 1874
 #define BUFSIZE 1024
 #define COMMID 312
-
-#define RHP_TYPE_SIZE 1
-#define RHP_COMMID_SIZE 2
-#define RHP_LENGTH_SIZE 2
-#define RHP_CHECKSUM_SIZE 2
 
 #define RHP_CONTROL_MESSAGE 2
 #define RHP_RHMP_MESSAGE 4
@@ -32,6 +27,7 @@
 
 
 int send_config(int clientSocket,uint8_t *buffer,int size,struct sockaddr_in serverAddr){
+
     if (sendto(clientSocket,buffer, size, 0,
             (struct sockaddr *) &serverAddr, sizeof (serverAddr)) < 0) {
         perror("sendto failed");
@@ -42,6 +38,7 @@ int send_config(int clientSocket,uint8_t *buffer,int size,struct sockaddr_in ser
     printf("Received from server: %s\n", (char*)(&buffer[5]));
     return atoi(buffer);
 }
+
 //10878     2A7E
 void printHeader(uint8_t* data,char* message){
     printf("print function: \n");
@@ -57,7 +54,8 @@ void printHeader(uint8_t* data,char* message){
         printf("%x ",data[i]);
     }
     printf("\nBytes checked:%d \nchecksum:",i);
-    int checksum = data[i+2]<<8 | data[i+1];
+    int checksum = data[i]<<8 | data[i+1];
+    
     printf("%x\n",checksum);
 
 }
@@ -116,41 +114,52 @@ int main() {
 
 
     /*LENGTH*/
-    data[position_indicator++] = 5;
+    data[position_indicator++] = sizeof(message_hello);
     data[position_indicator++] = 0;
 
 
 
     /*PAYLOAD*/
-    for(int i =0;i<=MESSAGE_1_SIZE;i++){
+    for(int i =0;i<MESSAGE_1_SIZE;i++){
         data[position_indicator++] = message_hello[i];
     }
 
-    if((position_indicator+1)%2!=0){
+    if((position_indicator)%2!=0){
         data[position_indicator++] = 0;       
         printf("buffer added");
         }
     uint32_t checks_result = 0;
+    checks_result &= 0;
+
+
     /*CHECKSUM COMPUTE*/
     for (int i = 0;i<position_indicator;i+=2){
-        // printf("%x + %x \n",checks_result,(((data[i]<<8))|(data[i+1]&0xFF)));
-        checks_result = checks_result + (((data[i+1]<<8))|(data[i]&0xFF));
-
+        checks_result = checks_result + (((data[i]<<8))|(data[i+1]&0xFF));
         if(checks_result>0xffff) {
+            printf("%x",checks_result);
             checks_result = checks_result & 0xFFFF;
             checks_result += 1;
+            printf("ones complement added\n");
             }
-            // printf("=:%x\n",checks_result);
-
     }
-    checks_result = ~(checks_result )& 0xFFFF ;
+    checks_result = (~(checks_result )& 0xFFFF)-1 ;
+    printf("%x\n",(checks_result));
+    printf("data[10]: %x, pos = %d\n",(checks_result & 0xFF),position_indicator);
 
-    data[position_indicator++] = (checks_result>>8 & 0xFF)-1;
-    data[position_indicator++] =( (checks_result) & 0xFF);
+    data[position_indicator++] = (checks_result & 0xFF);
+    data[position_indicator++] =( (checks_result>>8) & 0xFF);
+
     /* CHECKSUM */
     printHeader(data,message_hello);
-    send_config(clientSocket,data,position_indicator-1,serverAddr);
+    for(int i = 0;i<position_indicator;i++){
+        printf("%x ",data[i]);
+    }
+        printf("\n");
+
+    send_config(clientSocket,data,position_indicator,serverAddr);
     close(clientSocket);
+
+
     return 0;
 }
 
