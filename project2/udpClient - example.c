@@ -10,6 +10,8 @@
 #define _OPEN_SYS_ITOA_EXT
 
 #define SERVER "137.112.38.183"
+// #define SERVER "localhost"
+
 #define PORT 1874
 #define BUFSIZE 1024
 #define COMMID 312
@@ -29,7 +31,7 @@
 
 
 
-int send_config(int clientSocket,void *buffer,int size,struct sockaddr_in serverAddr){
+int send_config(int clientSocket,uint8_t *buffer,int size,struct sockaddr_in serverAddr){
     if (sendto(clientSocket,buffer, size, 0,
             (struct sockaddr *) &serverAddr, sizeof (serverAddr)) < 0) {
         perror("sendto failed");
@@ -37,32 +39,32 @@ int send_config(int clientSocket,void *buffer,int size,struct sockaddr_in server
     }
     memset(buffer,'\0',sizeof(buffer));
     recvfrom(clientSocket, buffer, BUFSIZE, 0, NULL, NULL);  
-    printf("Received from server: %s\n", (char*)buffer);
+    printf("Received from server: %s\n", (char*)(&buffer[5]));
     return atoi(buffer);
 }
-
-void printHeader(uint8_t* data){
-    printf("\nprint function: \n");
+//10878     2A7E
+void printHeader(uint8_t* data,char* message){
+    printf("print function: \n");
     int type = data[0];
-    int comID = data[1]<<8 | data[2];
+    int comID = data[2]<<8 | data[1];
     int paylength =data[4]<<8|data[3];
-    int checksum = data[sizeof(data)-1];
     int i;
     printf("type: %d\n",type);
     printf("comID: %d\n",comID);
     printf("paylength: %d\n",paylength);
     printf("message:");
-    for(i =5;i<=4+MESSAGE_1_SIZE;i++){
-        printf("%c",data[i]);
+    for(i =5;i<=4+paylength;i++){
+        printf("%x ",data[i]);
     }
     printf("\nBytes checked:%d \nchecksum:",i);
-    for(i=i+1;i<=12;i++) printf("%x",data[i]);
-    printf("\n");
+    int checksum = data[i+2]<<8 | data[i+1];
+    printf("%x\n",checksum);
 
 }
 
 
 int main() {
+    char message_hello[MESSAGE_1_SIZE] = MESSAGE_1;
     int clientSocket, nBytes;
     char buffer[BUFSIZE];
     struct sockaddr_in clientAddr, serverAddr;
@@ -101,14 +103,15 @@ int main() {
     memset(serverAddr.sin_zero, '\0', sizeof serverAddr.sin_zero);
 
     memset(buffer,'\0',BUFSIZE);
-    memset(data,'\0',10);
+    memset(data,'\0',BUFSIZE);
     int position_indicator = 0;
     /* TYPE */
     data[position_indicator++] = RHP_CONTROL_MESSAGE;
 
+    uint16_t id= COMMID;
     /* commID dec 312 hex 0x138*/
-    data[position_indicator++] = 0x01;
-    data[position_indicator++] = 0x38;
+    data[position_indicator++] = id & 0xFF;
+    data[position_indicator++] = (id >>8)&0xFF;
 
 
 
@@ -119,12 +122,9 @@ int main() {
 
 
     /*PAYLOAD*/
-    char message_1[MESSAGE_1_SIZE] = MESSAGE_1;
     for(int i =0;i<=MESSAGE_1_SIZE;i++){
-        data[position_indicator++] = message_1[i];
+        data[position_indicator++] = message_hello[i];
     }
-    //finish at data [9]
-
 
     if((position_indicator+1)%2!=0){
         data[position_indicator++] = 0;       
@@ -132,20 +132,24 @@ int main() {
         }
     uint32_t checks_result = 0;
     /*CHECKSUM COMPUTE*/
-    for (int i = 0;i<position_indicator;i++){
-        checks_result = checks_result + data[i];
-        if(checks_result>0xff) {
+    for (int i = 0;i<position_indicator;i+=2){
+        // printf("%x + %x \n",checks_result,(((data[i]<<8))|(data[i+1]&0xFF)));
+        checks_result = checks_result + (((data[i+1]<<8))|(data[i]&0xFF));
+
+        if(checks_result>0xffff) {
+            checks_result = checks_result & 0xFFFF;
             checks_result += 1;
-            checks_result = checks_result & 0xFF;
             }
+            // printf("=:%x\n",checks_result);
+
     }
-    checks_result = ~(checks_result & 0xFF);
+    checks_result = ~(checks_result )& 0xFFFF ;
 
-    data[position_indicator++] = checks_result & 0xFF;
-    data[position_indicator++] = (checks_result>>8) & 0xFF;
+    data[position_indicator++] = (checks_result>>8 & 0xFF)-1;
+    data[position_indicator++] =( (checks_result) & 0xFF);
     /* CHECKSUM */
-    printHeader(data);
-
+    printHeader(data,message_hello);
+    send_config(clientSocket,data,position_indicator-1,serverAddr);
     close(clientSocket);
     return 0;
 }
