@@ -41,7 +41,7 @@ int send_config(int clientSocket,void *buffer,int size,struct sockaddr_in server
     return atoi(buffer);
 }
 
-void printHeader(char* data){
+void printHeader(uint8_t* data){
     printf("\nprint function: \n");
     int type = data[0];
     int comID = data[1]<<8 | data[2];
@@ -56,7 +56,7 @@ void printHeader(char* data){
         printf("%c",data[i]);
     }
     printf("\nBytes checked:%d \nchecksum:",i);
-    for(i;i<12;i++) printf("%d",data[i]);
+    for(i=i+1;i<=12;i++) printf("%x",data[i]);
     printf("\n");
 
 }
@@ -66,7 +66,6 @@ int main() {
     int clientSocket, nBytes;
     char buffer[BUFSIZE];
     struct sockaddr_in clientAddr, serverAddr;
-    int checkSum[4];
     uint8_t data [BUFSIZE];
     /*Create UDP socket*/
     if ((clientSocket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
@@ -129,18 +128,21 @@ int main() {
 
     if((position_indicator+1)%2!=0){
         data[position_indicator++] = 0;       
-        printf("did the job");
+        printf("buffer added");
         }
-    // printf("curr pos : %d\n",position_indicator);
-    uint16_t checks_result = 0;
+    uint32_t checks_result = 0;
     /*CHECKSUM COMPUTE*/
     for (int i = 0;i<position_indicator;i++){
         checks_result = checks_result + data[i];
+        if(checks_result>0xff) {
+            checks_result += 1;
+            checks_result = checks_result & 0xFF;
+            }
     }
-    checks_result = ~checks_result;
-    printf("%x\n",checks_result);
-    data[position_indicator++] = checks_result && 0xFF;
-    data[position_indicator++] = (checks_result>>8) && 0xFF;
+    checks_result = ~(checks_result & 0xFF);
+
+    data[position_indicator++] = checks_result & 0xFF;
+    data[position_indicator++] = (checks_result>>8) & 0xFF;
     /* CHECKSUM */
     printHeader(data);
 
