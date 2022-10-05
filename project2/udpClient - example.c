@@ -9,8 +9,8 @@
 #include <stdlib.h>
 #define _OPEN_SYS_ITOA_EXT
 
-// #define SERVER "137.112.38.183"
-#define SERVER "localhost"
+#define SERVER "137.112.38.183"
+// #define SERVER "localhost"
 
 #define PORT 1874
 #define BUFSIZE 1024
@@ -19,90 +19,122 @@
 #define RHP_CONTROL_MESSAGE 2
 #define RHP_RHMP_MESSAGE 4
 
-#define MESSAGE_1_SIZE 5
-#define MESSAGE_2_SIZE 2
-#define MESSAGE_1 "hello"
-#define MESSAGE_2 "hi"
+#define MESSAGE_1_SIZE 6
+#define MESSAGE_2_SIZE 3
+#define CHECKSUM_SIZE 2
+#define TYPE_SIZE 1
+#define COMMID_SIZE 2
+#define LENGTH_SIZE 2
+#define NULLBIT_SIZE 1
+#define BIT_MASK_8 0XFF
+#define BIT_MASK_16 0XFFFF
+
+#define MESSAGE_1 "hello\0"
+#define MESSAGE_2 "hi\0"
 
 
-
-int send_config(int clientSocket,uint8_t *buffer,int size,struct sockaddr_in serverAddr){
+/*
+This function simply send the implemented packet to the server and recieves the data returned 
+from the server.
+*/
+void send_config(int clientSocket,uint8_t *buffer,int size,struct sockaddr_in serverAddr){
 
     if (sendto(clientSocket,buffer, size, 0,
             (struct sockaddr *) &serverAddr, sizeof (serverAddr)) < 0) {
         perror("sendto failed");
-        return 0;
     }
     memset(buffer,'\0',sizeof(buffer));
     recvfrom(clientSocket, buffer, BUFSIZE, 0, NULL, NULL);  
     printf("Received from server: %s\n", (char*)(&buffer[5]));
-    return atoi(buffer);
 }
 
-//10878     2A7E
-void printHeader(uint8_t* data,char* message){
-    printf("print function: \n");
+/*
+This function prints the information about the packet, specifically each field of the packet,
+which includes the following:
+Type:           Instruction
+ComID:          Fixed Const.
+PayLoadLength:  Length of message(in Bytes)  
+Message:        Message
+Bytes Checked (to determine if buffer is needed)
+CheckSum:       Checksum
+INPUT:      uint8_t* data:      Packet Buffer
+            char*    message:   message string
+            uint16_t checksum:  checksum
+*/
+void printHeader(uint8_t* data,char* message,uint16_t checksum){
     int type = data[0];
-    int comID = data[2]<<8 | data[1];
-    int paylength =data[4]<<8|data[3];
+    int comID = data[COMMID_SIZE]<<8 | data[COMMID_SIZE-1];
+    int paylength =data[COMMID_SIZE+TYPE_SIZE+LENGTH_SIZE-1]<<8|data[TYPE_SIZE+COMMID_SIZE];
     int i;
     printf("type: %d\n",type);
     printf("comID: %d\n",comID);
     printf("paylength: %d\n",paylength);
     printf("message:");
-    for(i =5;i<=4+paylength;i++){
-        printf("%x ",data[i]);
+    for(i =TYPE_SIZE+COMMID_SIZE+LENGTH_SIZE;i<TYPE_SIZE+COMMID_SIZE+LENGTH_SIZE+paylength;i++){
+        printf("%c",data[i]);
     }
-    printf("\nBytes checked:%d \nchecksum:",i);
-    int checksum = data[i+1]<<8 | data[i];
-    
-    printf("%x\n",checksum);
+    printf("\nBytes checked:%d \nchecksum:",i+NULLBIT_SIZE);
+    i += ((strlen(message)+NULLBIT_SIZE)%2==0?1:0); 
+    int checksum1 = data[i+1]<<8 | data[i];
+    printf("%x\n",checksum1);
 
 }
-
+/*CHECKSUM COMPUTE*/
+/*
+data:                       buffer got sent to the server
+position_indicator:         records the size of the buffer before the checksum field (in Bytes)
+*/
 uint16_t checksum_Compute(uint8_t* data,int position_indicator){
-    /*CHECKSUM COMPUTE*/
-    /*
-    data:                       buffer got sent to the server
-    position_indicator:         records the size of the buffer before the checksum field (in Bytes)
-    */
+
     uint32_t checks_result=0;
     for (int i = 0;i<position_indicator;i+=2){
-        checks_result = checks_result + (((data[i]<<8))|(data[i+1]&0xFF));
-        if(checks_result>0xffff) {
-            checks_result = checks_result & 0xFFFF;
+        checks_result = checks_result + (((data[i]<<8))|(data[i+1]&BIT_MASK_8));
+        if(checks_result>BIT_MASK_16) {                  //if carryout is found
+            checks_result = checks_result & BIT_MASK_16;
             checks_result += 1;
             printf("ones complement added\n");
             }
     }
 
-    checks_result = (~(checks_result)&  0xFFFF) ;
-    printf("%x\n",(checks_result));
+    checks_result = (~(checks_result)&  BIT_MASK_16) ;   //one's complement operation
     return checks_result;
 
 }
+/*
+This function fills the actual data into the packet
+INPUT:  char* message: message we want to send to the server 
+        uint8_t data:  packet buffer
+*/
 
 void config_data(char* message,uint8_t* data){
-    int position_indicator = 3;
+    int position_indicator = 0; //store the current position
+
+    /* TYPE */
+    data[position_indicator++] = RHP_CONTROL_MESSAGE;
+    uint16_t id= COMMID;
+    /* commID dec 312 hex 0x138*/
+    data[position_indicator++] = id & 0xff;
+    data[position_indicator++] = (id >>8)&0xff;
+    int strlength = strlen(message)+NULLBIT_SIZE;
     /*LENGTH*/
-    data[position_indicator++] = (strlen(message))&0xff;
-    data[position_indicator++] = ( strlen(message)>>8)&0xff;
+    data[position_indicator++] = (strlength)&BIT_MASK_8;
+    data[position_indicator++] = ( strlength>>8)&BIT_MASK_8;
     /*PAYLOAD*/
-    for(int i =0;i<strlen(message);i++){
+    for(int i =0;i<strlength;i++){
         data[position_indicator++] = message[i];
     }
 
     if((position_indicator)%2!=0){
         data[position_indicator++] = 0;       
-        printf("buffer added\n");
         }
 
 
     /* CHECKSUM */
     uint16_t checks_result = checksum_Compute(data,position_indicator);
-    data[position_indicator++] = (checks_result & 0xFF);
-    data[position_indicator++] =( (checks_result>>8) & 0xFF);
-    memset(message,0,sizeof(message));
+    data[position_indicator++] = ((checks_result>>8) & BIT_MASK_8);
+    data[position_indicator++] =( (checks_result) & BIT_MASK_8);
+    printHeader(data,message,checks_result);
+
 }
 
 int main() {
@@ -111,6 +143,8 @@ int main() {
     int clientSocket, nBytes;
     char buffer[BUFSIZE];
     struct sockaddr_in clientAddr, serverAddr;
+    int position_indicator = 0;
+
     uint8_t data [BUFSIZE];
     /*Create UDP socket*/
     if ((clientSocket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
@@ -145,63 +179,30 @@ int main() {
     serverAddr.sin_addr.s_addr = inet_addr(SERVER);
     memset(serverAddr.sin_zero, '\0', sizeof serverAddr.sin_zero);
 
-    memset(buffer,'\0',BUFSIZE);
+
+    /*sending message hello*/
     memset(data,'\0',BUFSIZE);
-    int position_indicator = 0;
-    /* TYPE */
-    data[position_indicator++] = RHP_CONTROL_MESSAGE;
-    uint16_t id= COMMID;
-    /* commID dec 312 hex 0x138*/
-    data[position_indicator++] = id & 0xFF;
-    data[position_indicator++] = (id >>8)&0xFF;
+    //fill in the packet
+    config_data(message_hello,data);    
+    //calculate the total size of the packet
+    int size = (strlen(MESSAGE_1)+NULLBIT_SIZE)+
+        TYPE_SIZE+COMMID_SIZE+LENGTH_SIZE+(MESSAGE_1_SIZE%2==0?1:0)+CHECKSUM_SIZE;
+
+    //send the message to the server
+    send_config(clientSocket,data,size,serverAddr);
+    printf("\n");
 
 
 
-    // /*LENGTH*/
-    // data[position_indicator++] = sizeof(message_hello);
-    // data[position_indicator++] = 0;
-
-
-
-    // /*PAYLOAD*/
-    // for(int i =0;i<MESSAGE_1_SIZE;i++){
-    //     data[position_indicator++] = message_hello[i];
-    // }
-
-    // if((position_indicator)%2!=0){
-    //     data[position_indicator++] = 0;       
-    //     printf("buffer added");
-    //     }
-
-
-    // /* CHECKSUM */
-    // uint16_t checks_result = checksum_Compute(data,position_indicator);
-
-    // data[position_indicator++] = (checks_result & 0xFF);
-    // data[position_indicator++] =( (checks_result>>8) & 0xFF);
-
-    config_data(message_hello,data);
-
-    printHeader(data,message_hello);
-    for(int i = 0;i<12;i++){
-        printf("%x ",data[i]);
-    }
-        printf("\n");
-
-    // send_config(clientSocket,data,position_indicator,serverAddr);
-    
-        printf("\n");
-        printf("\n");
-        printf("\n");
-
-
-    config_data(message_hi,data);    
-    printHeader(data,message_hi);
-    for(int i = 0;i<10;i++){
-        printf("%x ",data[i]);
-    }
-        printf("\n");
-    send_config(clientSocket,data,MESSAGE_2_SIZE+8,serverAddr);
+    /*message hi*/
+    //fill in the buffer
+    config_data(message_hi,data);   
+    //calculate the size of the packet
+    size = (strlen(MESSAGE_2)+NULLBIT_SIZE)+TYPE_SIZE+COMMID_SIZE+
+        LENGTH_SIZE+(MESSAGE_2_SIZE%2==0?1:0)+CHECKSUM_SIZE;
+    //send to the server
+    send_config(clientSocket,data,size,serverAddr);
+    //close socket
     close(clientSocket);
 
 
