@@ -1,38 +1,7 @@
 /************* UDP CLIENT CODE *******************/
 
-#include <stdio.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>      // From: https://linux.die.net/man/3/inet_addr
-#include <string.h>
-#include <unistd.h>
-#include <stdlib.h>
-#define _OPEN_SYS_ITOA_EXT
-
-#define SERVER "137.112.38.183"
-// #define SERVER "localhost"
-
-#define PORT 1874
-#define BUFSIZE 1024
-#define COMMID 312
-
-#define RHP_CONTROL_MESSAGE 2
-#define RHP_RHMP_MESSAGE 4
-
-#define MESSAGE_1_SIZE 6
-#define MESSAGE_2_SIZE 3
-#define CHECKSUM_SIZE 2
-#define TYPE_SIZE 1
-#define COMMID_SIZE 2
-#define LENGTH_SIZE 2
-#define NULLBIT_SIZE 1
-#define BIT_MASK_8 0XFF
-#define BIT_MASK_16 0XFFFF
-
-#define MESSAGE_1 "hello\0"
-#define MESSAGE_2 "hi\0"
-
-
+#include "pro2Header.h"
+/*SENDDING FUNCTION*/
 /*
 This function simply send the implemented packet to the server and recieves the data returned 
 from the server.
@@ -47,7 +16,7 @@ void send_config(int clientSocket,uint8_t *buffer,int size,struct sockaddr_in se
     recvfrom(clientSocket, buffer, BUFSIZE, 0, NULL, NULL);  
     printf("Received from server: %s\n", (char*)(&buffer[5]));
 }
-
+/*PRINT FUNCTION*/
 /*
 This function prints the information about the packet, specifically each field of the packet,
 which includes the following:
@@ -100,12 +69,12 @@ uint16_t checksum_Compute(uint8_t* data,int position_indicator){
     return checks_result;
 
 }
+/*BUFFER MANIPULATION*/
 /*
 This function fills the actual data into the packet
 INPUT:  char* message: message we want to send to the server 
         uint8_t data:  packet buffer
 */
-
 void config_data(char* message,uint8_t* data){
     int position_indicator = 0; //store the current position
 
@@ -113,9 +82,9 @@ void config_data(char* message,uint8_t* data){
     data[position_indicator++] = RHP_CONTROL_MESSAGE;
     uint16_t id= COMMID;
     /* commID dec 312 hex 0x138*/
-    data[position_indicator++] = id & 0xff;
-    data[position_indicator++] = (id >>8)&0xff;
-    int strlength = strlen(message)+NULLBIT_SIZE;
+    data[position_indicator++] = id & BIT_MASK_8;
+    data[position_indicator++] = (id >>8)&BIT_MASK_8;
+    int strlength = sizeof(message);
     /*LENGTH*/
     data[position_indicator++] = (strlength)&BIT_MASK_8;
     data[position_indicator++] = ( strlength>>8)&BIT_MASK_8;
@@ -136,12 +105,11 @@ void config_data(char* message,uint8_t* data){
     printHeader(data,message,checks_result);
 
 }
-
+/*MAIN FUNCTION*/
 int main() {
     char message_hello[MESSAGE_1_SIZE] = MESSAGE_1;
     char message_hi[MESSAGE_2_SIZE] = MESSAGE_2;
     int clientSocket, nBytes;
-    char buffer[BUFSIZE];
     struct sockaddr_in clientAddr, serverAddr;
     int position_indicator = 0;
 
@@ -163,14 +131,11 @@ int main() {
     clientAddr.sin_family = AF_INET;
     clientAddr.sin_addr.s_addr = htonl(INADDR_ANY);
     clientAddr.sin_port = htons(0);
-
-
-
-
     if (bind(clientSocket, (struct sockaddr *) &clientAddr, sizeof (clientAddr)) < 0) {
         perror("bind failed");
         return 0;
     }
+
 
     /* Configure settings in server address struct */
     memset((char*) &serverAddr, 0, sizeof (serverAddr));
