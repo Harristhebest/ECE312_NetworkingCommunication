@@ -22,13 +22,10 @@ void send_config(int clientSocket,uint8_t *buffer,int size,struct sockaddr_in se
     }
     memset(buffer,'\0',sizeof(buffer));
     recvfrom(clientSocket, buffer, BUFSIZE, 0, NULL, NULL);  
-    if(type ==0) printf("Received from server: %s\n", (char*)(&buffer[5]));
+    if(type !=ID_REQUEST_TYPE) printf("Received from server: %s\n", (char*)(&buffer[5]));
     else{
-        uint32_t (u32_buf);
-        int k =5;
-        //0 - 5, 1 - 9, 2 - 13
-        u32_buf= buffer[k+3]&0xF | (buffer[k+2]<<8)&0xF0 |(buffer[k+1]<<16)&0xF00|(buffer[k]<<24)&0xF000;
-        printf("ID Received from server: Decimal: %d,Hex: %x\n", (u32_buf),u32_buf);
+        uint32_t u32_buf= (buffer[8]&0x000F) | ((buffer[7])<<8) |((buffer[6])<<16)|((buffer[5])<<24);
+        printf("ID Received from server:\nDecimal:%lu\nHex: %x\n", (long)u32_buf,u32_buf);
     }
 }
 /*PRINT FUNCTION*/
@@ -221,7 +218,7 @@ int main() {
         TYPE_SIZE+COMMID_SIZE+LENGTH_SIZE+(MESSAGE_1_SIZE%2==0?1:0)+CHECKSUM_SIZE;
 
     //send the message to the server
-    send_config(clientSocket,data,size,serverAddr,0);
+    send_config(clientSocket,data,size,serverAddr,RHP_CONTROL_MESSAGE);
     printf("\n");
 
 
@@ -233,7 +230,7 @@ int main() {
     size = (strlen(MESSAGE_2)+NULLBIT_SIZE)+TYPE_SIZE+COMMID_SIZE+
         LENGTH_SIZE+(MESSAGE_2_SIZE%2==0?1:0)+CHECKSUM_SIZE;
     //send to the server
-    send_config(clientSocket,data,size,serverAddr,0);
+    send_config(clientSocket,data,size,serverAddr,RHP_CONTROL_MESSAGE);
     printf("\n");
     /*RHMP*/
     
@@ -242,7 +239,7 @@ int main() {
     config_RHMP_message_data(data,data2); 
         size = RHMP_REQUEST_FIELD_SIZE+TYPE_SIZE+COMMID_SIZE+
         LENGTH_SIZE+CHECKSUM_SIZE+NULLBIT_SIZE;
-    send_config(clientSocket,data2,size,serverAddr,0);
+    send_config(clientSocket,data2,size,serverAddr,MESSAGE_REQUEST_TYPE);
     
 
 
@@ -253,7 +250,7 @@ int main() {
     printf("\n");
     config_RHMP_message_data(data,data2); 
 
-    send_config(clientSocket,data2,size,serverAddr,1);
+    send_config(clientSocket,data2,size,serverAddr,ID_REQUEST_TYPE);
     printf("\n");
 
 
