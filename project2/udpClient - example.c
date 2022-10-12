@@ -1,12 +1,20 @@
 /************* UDP CLIENT CODE *******************/
 
 #include "pro2Header.h"
+
+char reverse(uint32_t b){
+    int i; uint32_t res;
+    b = (b&0xF000)>>12 |(b&0x0F00)>>4 |(b&0x00F0)<<4 | (b&0x000F)<<12;
+    return (char) b;
+}
+
+
 /*SENDDING FUNCTION*/
 /*
 This function simply send the implemented packet to the server and recieves the data returned 
 from the server.
 */
-void send_config(int clientSocket,uint8_t *buffer,int size,struct sockaddr_in serverAddr){
+void send_config(int clientSocket,uint8_t *buffer,int size,struct sockaddr_in serverAddr,int type){
 
     if (sendto(clientSocket,buffer, size, 0,
             (struct sockaddr *) &serverAddr, sizeof (serverAddr)) < 0) {
@@ -14,7 +22,14 @@ void send_config(int clientSocket,uint8_t *buffer,int size,struct sockaddr_in se
     }
     memset(buffer,'\0',sizeof(buffer));
     recvfrom(clientSocket, buffer, BUFSIZE, 0, NULL, NULL);  
-    printf("Received from server: %s\n", (char*)(&buffer[5]));
+    if(type ==0) printf("Received from server: %s\n", (char*)(&buffer[5]));
+    else{
+        uint32_t (u32_buf);
+        int k =5;
+        //0 - 5, 1 - 9, 2 - 13
+        u32_buf= buffer[k+3]&0xF | (buffer[k+2]<<8)&0xF0 |(buffer[k+1]<<16)&0xF00|(buffer[k]<<24)&0xF000;
+        printf("ID Received from server: Decimal: %d,Hex: %x\n", (u32_buf),u32_buf);
+    }
 }
 /*PRINT FUNCTION*/
 /*
@@ -75,7 +90,7 @@ This function fills the actual data into the packet
 INPUT:  char* message: message we want to send to the server 
         uint8_t data:  packet buffer
 */
-void config_data(char* message,uint8_t* data){
+void config_CTR_message_data(char* message,uint8_t* data){
     int position_indicator = 0; //store the current position
 
     /* TYPE */
@@ -84,13 +99,13 @@ void config_data(char* message,uint8_t* data){
     /* commID dec 312 hex 0x138*/
     data[position_indicator++] = id & BIT_MASK_8;
     data[position_indicator++] = (id >>8)&BIT_MASK_8;
-    int strlength = sizeof(message);
+    int strlength = strlen(message)+NULLBIT_SIZE;
     /*LENGTH*/
     data[position_indicator++] = (strlength)&BIT_MASK_8;
     data[position_indicator++] = ( strlength>>8)&BIT_MASK_8;
     /*PAYLOAD*/
     for(int i =0;i<strlength;i++){
-        data[position_indicator++] = message[i];
+        data[position_indicator++] =  message[i];
     }
 
     if((position_indicator)%2!=0){
@@ -105,6 +120,56 @@ void config_data(char* message,uint8_t* data){
     printHeader(data,message,checks_result);
 
 }
+
+/*BUFFER MANIPULATION*/
+/*
+This function fills the actual data into the packet
+INPUT:  char* message: message we want to send to the server 
+        uint8_t data:  packet buffer
+*/
+void config_RHMP_message_data(uint8_t* RHMP,uint8_t* data){
+    int position_indicator = 0; //store the current position
+    memset(data,0,BUFSIZE);
+    /* TYPE */
+    data[position_indicator++] = RHP_RHMP_MESSAGE;
+    uint16_t id= COMMID;
+    /* commID dec 312 hex 0x138*/
+    data[position_indicator++] = id & BIT_MASK_8;
+    data[position_indicator++] = (id >>8)&BIT_MASK_8;
+    int length = RHMP_REQUEST_FIELD_SIZE;
+    /*LENGTH*/
+    data[position_indicator++] = (length)&BIT_MASK_8;
+    data[position_indicator++] = (length>>8)&BIT_MASK_8;
+    /*PAYLOAD*/
+    for(int i =0;i<length;i++){
+        data[position_indicator++] =  RHMP[i];
+    }   
+    if(position_indicator%2!=0) data[position_indicator++] = 0;
+
+
+
+    /* CHECKSUM */
+    uint16_t checks_result = checksum_Compute(data,position_indicator);
+    data[position_indicator++] = ((checks_result>>8) & BIT_MASK_8);
+    data[position_indicator++] =( (checks_result) & BIT_MASK_8);
+    printHeader(data,"",checks_result);
+}
+
+
+
+void config_RHMP_buffer(uint8_t type,uint8_t* data){
+    memset(data,0,BUFSIZE);
+    int pos_indicator = 0;
+    uint16_t srcPort = SRCPORT; 
+    uint16_t dstPort = DESTPORT;
+    data[pos_indicator++] = (type)&0x0F |((dstPort<<4)&0xF0);
+    data[pos_indicator++]=dstPort >>4 & 0xFF;
+    data[pos_indicator++]=(dstPort>>12 & 0b11)&0xFF | (srcPort & 0x3F)<<2;
+    data[pos_indicator]=(srcPort>>6) &0XFF;
+    
+}
+
+
 /*MAIN FUNCTION*/
 int main() {
     char message_hello[MESSAGE_1_SIZE] = MESSAGE_1;
@@ -114,6 +179,8 @@ int main() {
     int position_indicator = 0;
 
     uint8_t data [BUFSIZE];
+    uint8_t data2 [BUFSIZE];
+
     /*Create UDP socket*/
     if ((clientSocket = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
         perror("cannot create socket");
@@ -148,25 +215,50 @@ int main() {
     /*sending message hello*/
     memset(data,'\0',BUFSIZE);
     //fill in the packet
-    config_data(message_hello,data);    
+    config_CTR_message_data(message_hello,data);    
     //calculate the total size of the packet
     int size = (strlen(MESSAGE_1)+NULLBIT_SIZE)+
         TYPE_SIZE+COMMID_SIZE+LENGTH_SIZE+(MESSAGE_1_SIZE%2==0?1:0)+CHECKSUM_SIZE;
 
     //send the message to the server
-    send_config(clientSocket,data,size,serverAddr);
+    send_config(clientSocket,data,size,serverAddr,0);
     printf("\n");
 
 
 
     /*message hi*/
     //fill in the buffer
-    config_data(message_hi,data);   
+    config_CTR_message_data(message_hi,data);   
     //calculate the size of the packet
     size = (strlen(MESSAGE_2)+NULLBIT_SIZE)+TYPE_SIZE+COMMID_SIZE+
         LENGTH_SIZE+(MESSAGE_2_SIZE%2==0?1:0)+CHECKSUM_SIZE;
     //send to the server
-    send_config(clientSocket,data,size,serverAddr);
+    send_config(clientSocket,data,size,serverAddr,0);
+    printf("\n");
+    /*RHMP*/
+    
+    //fill in the packet
+    config_RHMP_buffer(MESSAGE_REQUEST_TYPE,data);   
+    config_RHMP_message_data(data,data2); 
+        size = RHMP_REQUEST_FIELD_SIZE+TYPE_SIZE+COMMID_SIZE+
+        LENGTH_SIZE+CHECKSUM_SIZE+NULLBIT_SIZE;
+    send_config(clientSocket,data2,size,serverAddr,0);
+    
+
+
+
+    memset(data2,0,BUFSIZE);
+    config_RHMP_buffer(ID_REQUEST_TYPE,data);   
+
+    printf("\n");
+    config_RHMP_message_data(data,data2); 
+
+    send_config(clientSocket,data2,size,serverAddr,1);
+    printf("\n");
+
+
+
+    
     //close socket
     close(clientSocket);
 
